@@ -1,0 +1,111 @@
+---
+title: "Final_Project"
+author: "Qingyu Ye"
+date: "May 4, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(echo = T, message = F, warning = F)
+
+```
+
+```{r echo=FALSE}
+library("ggplot2")
+library("car")
+library("boot")
+library("caret")
+```
+
+```{r}
+df <- read.csv("cleaned_df.csv")
+```
+
+```{r}
+head(df)
+```
+
+
+
+
+```{r}
+lm1 <- glm(raceethnicity~., data=df,family=binomial(link='logit'))
+summary(lm1)
+```
+```{r}
+vif(lm1)
+```
+
+```{r}
+column_dropped <- c("Professional","Drive","Transit","Carpool","PrivateWork","PublicWork","Hispanic","White","Native","Asian","Pacific","h_income","TotalPop")
+df1 <- df[ , !(names(df) %in% column_dropped)]
+```
+
+
+
+
+```{r}
+lm2 <- glm(raceethnicity~., data=df1,family=binomial(link='logit'))
+vif(lm2)
+```
+
+```{r}
+summary(lm2)
+```
+
+Select the variables with p-value less than 0.1. They are *age*, *cause*, *State* and *Black*. (*armed* only has unknown with p-value below 0.1, so it doesn't count)
+
+```{r}
+column_list <- c("age","cause","State","Black","raceethnicity")
+df1 <- df[, names(df) %in% column_list]
+```
+
+```{r}
+lm3 <- glm(raceethnicity~., data=df1,family=binomial(link='logit'))
+summary(lm3)
+```
+
+
+
+```{r}
+threshold <- 0.5
+pred_prob <- predict(lm3, newdata=df1)
+y_pred <- (pred_prob > threshold)
+y_true <- (df1$raceethnicity == "Non-black")
+accuracy <- mean(y_pred==y_true)
+accuracy
+```
+
+
+
+```{r}
+# predicted number of black
+print(paste('The number of predicted black is ', length(y_pred) - sum(y_pred)))
+# predicted number of black
+print(paste('The number of true black is ', length(y_true) - sum(y_true)))
+```
+
+Cross-validation
+
+One-hot encoding first.
+```{r}
+df.dmy <- dummyVars(" ~ .", data = df1[, !(names(df1) %in% c("raceethnicity"))])
+df.dmy <- data.frame(predict(df.dmy,newdata=df1[, !(names(df1) %in% c("raceethnicity"))]))
+df.dmy$raceethnicity <- df1$raceethnicity
+```
+
+
+
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+lm.cv <- train(raceethnicity ~ .,  data=df.dmy, method="glm", family="binomial",
+                 trControl = ctrl, tuneLength = 5)
+pred = predict(lm.cv, newdata=df.dmy)
+confusionMatrix(data=pred, df.dmy$raceethnicity)
+```
+
+The model didn't converge. 
+
+
